@@ -51,25 +51,18 @@ class evaluation(object):
     def get_integral(self, I, Gain):
         out = []
         for i in range(1,len(self.PE_array)):
-            out_aux = I.ideal(self.signal[i*self.p_length:(i+1)*self.p_length],Gain=Gain)
+            out_aux = I.ideal(self.signal[i*self.p_length:(i+1)*self.p_length], Gain=Gain)
             out.append(np.max(out_aux))
-
-
-        # self.Ipeak_array_L = np.array(self.Ipeak_array)
-        # self.vGSpeak_array_L = np.array(self.vGSpeak_array)
-        # self.MAX_current = np.max(self.Ipeak_array_L)
-        # self.PE_current  = np.min(self.Ipeak_array_L)/self.PE_inc
-        # self.MAX_voltage = np.max(self.vGSpeak_array_L)
-        # self.PE_voltage  = (np.min(self.vGSpeak_array_L) - self.VTH) / self.PE_inc
-        #return self.MAX_current, self.PE_current, self.MAX_voltage, self.PE_voltage
         return np.array(out)
 
 
-    def lsb_2_pe_linear(self, Nbits):
+    def lsb_2_pe(self, I, Nbits, LSB, Gain, offset_corr=0):
+        Iout = self.get_integral(I, Gain)
         range  = np.array([x for x in np.arange(0,2**Nbits)])*LSB
-        PE_range_L, dump = PE_2_LSB_LUT(I_range,
-                                        self.Ipeak_array_L,
-                                        self.PE_inc,
-                                        self.MAX_PE)
+        outA, outB = PE_2_LSB_LUT(range, Iout-offset_corr, self.PE_inc, self.max_pe)
+        return outA, outB
 
-    
+
+    def res_compute(self, LSB_per_PE):
+        RES = np.divide(np.divide(np.ones(len(LSB_per_PE)),LSB_per_PE),np.arange(1,self.max_pe))*100
+        return RES
