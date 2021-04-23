@@ -78,7 +78,8 @@ class translinear_loop(object):
 
 
 class SQRT_integrator(object):
-    def __init__(self, KPP_2n=150E-6, W_L=10, VTH=0.55, time_unit=100E-12, cap=10E-12):
+    def __init__(self, KPP_2n=150E-6, W_L=10, VTH=0.55, time_unit=100E-12,
+                 cap=10E-12, I_o=1E-6, I_a=1E-6):
         self.transl    = translinear_loop(KPP_2n, W_L, VTH)
         self.cap       = capacitor(cap,time_unit)
         #self.MN_3      = mosfet(KPP_2n=KPP_2n, W_L=W_L/2.0, VTH=VTH)
@@ -86,8 +87,12 @@ class SQRT_integrator(object):
         self.time_unit = time_unit
         self.vGS_C_prev = VTH
         self.iC_prev = 0
+        self.I_o = I_o
+        self.I_a = I_a
 
-    def Efunc_integrator1(self, Iout, I_o, I_a, I_in):
+    def Efunc_integrator1(self, Iout, I_in):
+        I_o = self.I_o*np.ones(len(I_in))
+        I_a = self.I_a*np.ones(len(I_in))
         gmean      = self.transl.geo_mean(I_o, Iout)
         mult_div_1 = self.transl.mult_div(I_o + I_in, I_a, gmean/2.0)
         mult_div_2 = self.transl.mult_div(I_o, I_a, gmean/2.0)
@@ -96,7 +101,9 @@ class SQRT_integrator(object):
         Iout_est = self.MN_4.iDS(vGS_C)
         return Iout - Iout_est
 
-    def Efunc_integrator2(self, Iout, I_o, I_a, I_in):
+    def Efunc_integrator2(self, Iout, I_in):
+        I_o = self.I_o*np.ones(len(I_in))
+        I_a = self.I_a*np.ones(len(I_in))
         gmean      = self.transl.geo_mean(I_o, Iout)
         mult_div_1 = self.transl.mult_div(I_o + I_in, I_a, gmean/2.0)
         mult_div_2 = self.transl.mult_div(I_o, I_a, gmean/2.0)
@@ -106,7 +113,9 @@ class SQRT_integrator(object):
         return vGS_C - vGS_est
 
 
-    def __call__(self, I_o, I_a, I_in):
+    def __call__(self, I_in):
+        I_o = self.I_o*np.ones(len(I_in))
+        I_a = self.I_a*np.ones(len(I_in))
         Iout_array=[]
         for i in range(0,len(I_in)):
 
@@ -132,36 +141,122 @@ class SQRT_integrator(object):
         return np.array(Iout_array).reshape(-1)
 
 
-    def ideal(self, I_o, I_a, I_in, Gain=1):
+    def ideal(self, I_in, Gain=1):
+        I_o = self.I_o*np.ones(len(I_in))
+        I_a = self.I_a*np.ones(len(I_in))
         Iout = np.cumsum(I_in*Gain)*self.time_unit
         tau  = np.divide(self.cap.C * np.sqrt(I_o), np.sqrt(4*self.MN_4.KPP_2n*self.MN_4.W_L) * I_a)
         # Constant 4 comes from BETA definition as KPP_2n * 2
         Iout = np.divide(Iout,tau)
         vGS_C = self.MN_4.vGS(Iout)
 
-        return Iout,vGS_C
+        return vGS_C
 
+
+class LIN_integrator(object):
+    def __init__(self, KPP_2n=150E-6, W_L=10, VTH=0.55, time_unit=100E-12,
+                 cap=10E-12, I_o=1E-6, I_a=1E-6):
+        self.transl    = translinear_loop(KPP_2n, W_L, VTH)
+        self.cap       = capacitor(cap,time_unit)
+        #self.MN_3      = mosfet(KPP_2n=KPP_2n, W_L=W_L/2.0, VTH=VTH)
+        self.MN_4      = mosfet(KPP_2n=KPP_2n, W_L=W_L, VTH=VTH)
+        self.time_unit = time_unit
+        self.vGS_C_prev = VTH
+        self.iC_prev = 0
+        self.I_o = I_o
+        self.I_a = I_a
+
+    def Efunc_integrator1(self, Iout, I_in):
+        I_o = self.I_o*np.ones(len(I_in))
+        I_a = self.I_a*np.ones(len(I_in))
+        gmean      = self.transl.geo_mean(I_o, Iout)
+        mult_div_1 = self.transl.mult_div(I_o + I_in, I_a, gmean/2.0)
+        mult_div_2 = self.transl.mult_div(I_o, I_a, gmean/2.0)
+        iC = mult_div_1 - mult_div_2 #iC = mult_div_1
+        vGS_C  = self.cap.vC(iC) + self.vGS_C_prev
+        Iout_est = self.MN_4.iDS(vGS_C)
+        return Iout - Iout_est
+
+    def Efunc_integrator2(self, Iout, I_in):
+        I_o = self.I_o*np.ones(len(I_in))
+        I_a = self.I_a*np.ones(len(I_in))
+        gmean      = self.transl.geo_mean(I_o, Iout)
+        mult_div_1 = self.transl.mult_div(I_o + I_in, I_a, gmean/2.0)
+        mult_div_2 = self.transl.mult_div(I_o, I_a, gmean/2.0)
+        iC = mult_div_1 - mult_div_2 #iC = mult_div_1
+        vGS_C  = self.cap.vC(iC) + self.vGS_C_prev
+        vGS_est = self.MN_4.vGS(Iout)
+        return vGS_C - vGS_est
+
+
+    def __call__(self, I_in):
+        I_o = self.I_o*np.ones(len(I_in))
+        I_a = self.I_a*np.ones(len(I_in))
+        Iout_array=[]
+        for i in range(0,len(I_in)):
+
+            EFunc_Lambda = lambda Iout: self.Efunc_integrator1(Iout,
+                                                              np.array([I_o[i]]),
+                                                              np.array([I_a[i]]),
+                                                              np.array([I_in[i]]))
+
+            Iout = least_squares( EFunc_Lambda,
+                                    x0=2E-9,
+                                    bounds=(0,100E-6),
+                                    ftol=5e-16,
+                                    xtol=5e-23,
+                                    gtol=5e-23,
+                                    method='trf',
+                                    verbose=1)
+
+            Iout_array.append(Iout['x'])
+
+            self.vGS_C_prev = self.MN_4.vGS(Iout['x'])
+
+        #return np.cumsum(np.array(Iout_array).reshape(-1))
+        return np.array(Iout_array).reshape(-1)
+
+
+    def ideal(self, I_in, Gain=1):
+        I_o = self.I_o*np.ones(len(I_in))
+        I_a = self.I_a*np.ones(len(I_in))
+        Iout = np.cumsum(I_in*Gain)*self.time_unit
+        tau  = np.divide(self.cap.C * np.sqrt(I_o), np.sqrt(4*self.MN_4.KPP_2n*self.MN_4.W_L) * I_a)
+        # Constant 4 comes from BETA definition as KPP_2n * 2
+        Iout = np.divide(Iout,tau)
+        return Iout
 
 
 
 class LOG_integrator(object):
     def __init__(self, KPP_2n=150E-6, W_L=10, VTH=0.55, time_unit=100E-12,
-                 cap1=10E-12, cap2=10E-12, R=10E3):
+                 cap1=10E-12, cap2=10E-12, R=10E3, Ibias1=1E-6, Ibias2=1E-6, Ibias3=1E-6):
         self.transl = translinear_loop(KPP_2n, W_L, VTH)
         self.cap1   = capacitor(cap1,time_unit)
         self.cap2   = capacitor(cap2,time_unit)
         self.R      = R
         self.time_unit = time_unit
+        self.Ibias1 = Ibias1
+        self.Ibias2 = Ibias2
+        self.Ibias3 = Ibias3
 
     def __call__(self,Iin,Ibias1,Ibias2,Ibias3):
+        Ibias1 = self.Ibias1*np.ones(len(Iin))
+        Ibias2 = self.Ibias2*np.ones(len(Iin))
+        Ibias3 = self.Ibias3*np.ones(len(Iin))
+
         V_C1 = self.cap1.vC(Iin)
         Im1  = self.transl.mult_div(Iin + Ibias1, Ibias2, V_C1/self.R + Ibias3)
         Im2  = self.transl.mult_div(Ibias1, Ibias2, V_C1/self.R + Ibias3)
         Im3  = Im1 - Im2
         return self.cap2.vC(Im3)
 
-    def ideal(self,Iin,Ibias1,Ibias2,Ibias3):
+    def ideal(self, Iin, Gain=1):
         #K = Ibias2*self.R*(self.cap1.C/self.cap2.C)
         #return K*np.log(self.cap1.vC(Iin)/self.R+Ibias3)
         #return (Ibias2/self.cap2.C)*np.cumsum(np.divide(Iin,Ibias3+self.cap1.vC(Iin)/self.R))*self.time_unit
-        return (Ibias2/self.cap2.C)*(self.R*self.cap1.C)*(np.log(self.cap1.vC(Iin)/self.R+Ibias3)-np.log(Ibias3))
+        Ibias1 = self.Ibias1*np.ones(len(Iin))
+        Ibias2 = self.Ibias2*np.ones(len(Iin))
+        Ibias3 = self.Ibias3*np.ones(len(Iin))
+
+        return (Ibias2/self.cap2.C)*(self.R*self.cap1.C)*(np.log(self.cap1.vC(Iin*Gain)/self.R+Ibias3)-np.log(Ibias3))
