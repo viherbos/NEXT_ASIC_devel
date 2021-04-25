@@ -9,7 +9,7 @@ from waveforms import wave_gen
 
 
 def find_nearest_bigger(A,val):
-    return np.where(A-val > 0, A-val, np.inf).argmin()
+    return np.where(A-val >= 0, A-val, np.inf).argmin()
 
 def find_nearest(A,val):
     return np.abs(A-val).argmin()
@@ -22,7 +22,7 @@ def PE_2_LSB_LUT(DAC_array, PE_charge_array, PE_inc, MAX_PE):
         data = find_nearest_bigger(PE_charge_array,code_v)
         pe_lsb_lut.append(data*PE_inc)
     PE_LSB_LUT = np.array(pe_lsb_lut)
-    LSB_per_PE = np.array([np.sum(np.floor(PE_LSB_LUT) == x) for x in np.arange(1, MAX_PE)])
+    LSB_per_PE = np.array([np.sum(PE_LSB_LUT == x) for x in np.arange(PE_inc, MAX_PE,PE_inc)])
     return PE_LSB_LUT,LSB_per_PE
 
 
@@ -59,10 +59,11 @@ class evaluation(object):
     def lsb_2_pe(self, I, Nbits, LSB, Gain, offset_corr=0):
         Iout = self.get_integral(I, Gain)
         range  = np.array([x for x in np.arange(0,2**Nbits)])*LSB
-        outA, outB = PE_2_LSB_LUT(range, Iout-offset_corr, self.PE_inc, self.max_pe)
-        return outA, outB
+        outA, dump = PE_2_LSB_LUT(range, Iout-offset_corr, self.PE_inc, self.max_pe)
+        aux = np.divide(np.array([x for x in np.arange(0,2**Nbits)]),outA)
+        return outA, aux
 
 
-    def res_compute(self, LSB_per_PE):
-        RES = np.divide(np.divide(np.ones(len(LSB_per_PE)),LSB_per_PE),np.arange(1,self.max_pe))*100
+    def res_compute(self, PE_LSB_LUT, LSB_per_PE):
+        RES = np.divide(np.divide(np.ones(len(LSB_per_PE)),LSB_per_PE),PE_LSB_LUT)*100
         return RES
